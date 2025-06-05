@@ -1,6 +1,6 @@
 # ScentFinder: A Personalized Cologne Recommendation System
 
-![ScentFinder Banner](scentfinder.png)
+![ScentFinder Banner](ScentFinder.png)
 
 ## 👃 Project Overview
 
