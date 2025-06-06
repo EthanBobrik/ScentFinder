@@ -2,7 +2,10 @@ pandas
 numpy
 sqlalchemy
 beautifulsoup4
-requests
+requests~=2.32.3
 streamlit
 scikit-learn
 joblib
+os
+pymango
+dotenv
