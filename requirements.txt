@@ -6,3 +6,7 @@ requests
 streamlit
 scikit-learn
 joblib
+os
+pymongo
+load-dotenv
+lxml
