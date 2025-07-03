@@ -45,7 +45,7 @@ def get_note_urls():
         fix_hairline=True,
     )
 
-    driver.get("http://www.fragrantica.com/notes/")
+    driver.get("https://www.fragrantica.com/notes/")
     # Scroll down to trigger dynamic content
     driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
     time.sleep(5)  # give time for JS to load after scrolling
@@ -62,7 +62,7 @@ def get_note_urls():
 
 def get_cologne_urls():
     options = Options()
-    # options.add_argument("--headless")
+    options.add_argument("--headless")
     options.add_argument("--start-maximized")
     options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36")
 
@@ -87,13 +87,13 @@ def get_cologne_urls():
                 driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
                 time.sleep(5)  # give time for JS to load after scrolling
                 tree1 = html.fromstring(driver.page_source)
-                brand_urls = tree1.xpath("//div[@class = 'designerlist cell small-6 large-4']//a//@href")
+                brand_urls = tree1.xpath("//div[contains(@class,'designerlist')]//a/@href")
                 for brand_url in brand_urls:
                     try:
                         driver.get(f"https://www.fragrantica.com{brand_url}")
                         # Scroll down to trigger dynamic content
                         driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-                        time.sleep(1)  # give time for JS to load after scrolling
+                        time.sleep(5)  # give time for JS to load after scrolling
                         tree2 = html.fromstring(driver.page_source)
                         cologne_urls = tree2.xpath("//div[@class='flex-child-auto']//a//@href")
                         for cologne_url in cologne_urls:
@@ -206,7 +206,7 @@ def cologne_scraper():
             continue
 
 def main():
-    get_note_urls()
+    #get_note_urls()
     get_cologne_urls()
     note_scraper()
     cologne_scraper()
