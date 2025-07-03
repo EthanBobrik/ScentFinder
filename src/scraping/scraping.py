@@ -1,10 +1,13 @@
 import os
-
+from selenium import webdriver
+from selenium.webdriver.chrome.options import Options
+from selenium_stealth import stealth
 from urllib import request, error
 import requests
 from dotenv import load_dotenv
 from lxml import html
 from pymongo.mongo_client import MongoClient
+import time
 
 load_dotenv()
 
@@ -26,37 +29,85 @@ def get_data_by_name(name, collection_name="colognes"):
     return collection.find_one({"name": name})
 
 def get_note_urls():
-    with open("data/raw/notes.txt", "w",encoding="utf-8") as f:
-        page = requests.get("https://www.fragrantica.com/notes/")
-        tree = html.fromstring(page.content)
-        page.close()
-        note_urls = tree.xpath("//div[@class='notebox']/a/@href")
-        for note_url in note_urls:
-            url = note_url + "\n"
-            f.write(url)
+    options = Options()
+    options.add_argument("--headless")
+    options.add_argument("--start-maximized")
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36")
+
+    driver = webdriver.Chrome(options=options)
+
+    stealth(driver,
+        languages=["en-US", "en"],
+        vendor="Google Inc.",
+        platform="Win32",
+        webgl_vendor="Intel Inc.",
+        renderer="Intel Iris OpenGL Engine",
+        fix_hairline=True,
+    )
+
+    driver.get("http://www.fragrantica.com/notes/")
+    # Scroll down to trigger dynamic content
+    driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+    time.sleep(5)  # give time for JS to load after scrolling
+    tree = html.fromstring(driver.page_source)
+    note_urls = tree.xpath("//div[contains(@class, 'notebox')]//a/@href")
+    print("Found", len(note_urls), "note URLs")
+
+    with open("../../data/raw/notes.txt", "w", encoding="utf-8") as f:
+        for url in note_urls:
+            f.write(url + "\n")
             print(url)
 
+    driver.quit()
+
 def get_cologne_urls():
-    countries = ["United States", "France", "Italy", "United Kingdom", "Germany", "Spain", "United Arab Emirates (UAE)",
+    options = Options()
+    # options.add_argument("--headless")
+    options.add_argument("--start-maximized")
+    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36")
+
+    driver = webdriver.Chrome(options=options)
+
+    stealth(driver,
+        languages=["en-US", "en"],
+        vendor="Google Inc.",
+        platform="Win32",
+        webgl_vendor="Intel Inc.",
+        renderer="Intel Iris OpenGL Engine",
+        fix_hairline=True,
+    )
+
+    countries = ["United States", "France", "Italy", "United Kingdom", "Germany", "Spain", "United Arab Emirates",
                  "Russia", "Switzerland", "Netherlands", "Japan", "England", "Canada", "Brazil", "Poland", "Australia"]
-    with open("data/raw/colognes.txt", "w",encoding="utf-8") as f:
+    with open("../../data/raw/colognes.txt", "w", encoding="utf-8") as f:
         for country in countries:
-            page1 = requests.get(f"https://www.fragrantica.com/colognes/{country}.html")
-            tree1 = html.fromstring(page1.content)
-            page1.close()
-            brand_urls = tree1.xpath("//div[@class='nduList']/p/a")
-            for brand_url in brand_urls:
-                page2 = requests.get(f"https://www.fragrantica.com{brand_url.attrib['href']}")
-                tree2 = html.fromstring(page2.content)
-                page2.close()
-                cologne_urls = tree2.xpath("//div[@class='perfumeslist']/div/div/p/a")
-                for cologne_url in cologne_urls:
-                    url = "https://www.fragrantica.com" + cologne_url.attrib['href'] + "\n"
-                    f.write(url)
-                    print(url)
+            try:
+                driver.get(f"https://www.fragrantica.com/country/{country}.html")
+                # Scroll down to trigger dynamic content
+                driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                time.sleep(5)  # give time for JS to load after scrolling
+                tree1 = html.fromstring(driver.page_source)
+                brand_urls = tree1.xpath("//div[@class = 'designerlist cell small-6 large-4']//a//@href")
+                for brand_url in brand_urls:
+                    try:
+                        driver.get(f"https://www.fragrantica.com{brand_url}")
+                        # Scroll down to trigger dynamic content
+                        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                        time.sleep(1)  # give time for JS to load after scrolling
+                        tree2 = html.fromstring(driver.page_source)
+                        cologne_urls = tree2.xpath("//div[@class='flex-child-auto']//a//@href")
+                        for cologne_url in cologne_urls:
+                            url = f"https://www.fragrantica.com{cologne_url}" + "\n"
+                            f.write(url)
+                    except Exception:
+                        continue
+            except Exception:
+                continue
+
+    driver.quit()
 
 def note_scraper():
-    with open("data/raw/notes.txt", "r",encoding="utf-8") as f:
+    with open("../../data/raw/notes.txt", "r",encoding="utf-8") as f:
         note_urls = f.readlines()
     num_notes = len(note_urls)
     num_records = get_collection().count_documents({})
@@ -65,9 +116,9 @@ def note_scraper():
             url = note_urls[idx][:-1]
             page = requests.get(url)
             tree = html.fromstring(page.content)
-            note_title = tree.xpath("//h1/text()")[0].trim()
-            note_group = tree.xpath("//h3/b")[0].trim()
-            note_description = tree.xpath("//div[@class='cell callout']/p/text()")[0].trim()
+            note_title = tree.xpath("//h1//text()")[0].trim()
+            note_group = tree.xpath("//h3//b")[0].trim()
+            note_description = tree.xpath("//div[@class='cell callout']//p//text()")[0].trim()
             note_data = {
                 "name": note_title,
                 "group": note_group.text,
@@ -89,7 +140,7 @@ def represents_int(s):
         return False
 
 def cologne_scraper():
-    with open("data/raw/colognes.txt", "r",encoding="utf-8") as f:
+    with open("../../data/raw/colognes.txt", "r",encoding="utf-8") as f:
         cologne_urls = f.readlines()
     num_colognes = len(cologne_urls)
     num_records = get_collection().count_documents({})
@@ -102,11 +153,11 @@ def cologne_scraper():
             brand = brand_and_perfume[0].replace("-"," ")
             perfume_title = brand_and_perfume[1].split("-")
             perfume_title = " ".join(perfume_title[:-1])
-            page_title = tree.xpath("//title/text()")[0]
+            page_title = tree.xpath("//head//title//text()")[0]
             if not page_title:
                 launch_year = None
             else:
-                launch_year = page_title[-4:]
+                launch_year = page_title[-4:].trim()
                 if not represents_int(launch_year):
                     launch_year = None
             main_accords = [text.strip() for text in tree.xpath("//div[@class='cell accord-bar']//text()") if text.strip()]
