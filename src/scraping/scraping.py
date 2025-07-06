@@ -1,6 +1,10 @@
 import os
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
+from selenium.webdriver.support.ui import WebDriverWait
+from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
+from seleniumbase import SB
 from selenium_stealth import stealth
 from urllib import request, error
 import requests
@@ -61,50 +65,61 @@ def get_note_urls():
     driver.quit()
 
 def get_cologne_urls():
-    options = Options()
-    options.add_argument("--headless")
-    options.add_argument("--start-maximized")
-    options.add_argument("user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36")
+    with SB(uc=True, headless=True) as driver:
+        countries = ["United States", "France", "Italy", "United Kingdom", "Germany", "Spain",
+                     "United Arab Emirates", "Russia", "Switzerland", "Netherlands", "Japan",
+                     "England", "Canada", "Brazil", "Poland", "Australia"]
 
-    driver = webdriver.Chrome(options=options)
+        with open("../../data/raw/colognes.txt", "w", encoding="utf-8") as f:
+            for country in countries:
+                try:
+                    country_url = f"https://www.fragrantica.com/country/{country}.html"
+                    driver.open(country_url)
 
-    stealth(driver,
-        languages=["en-US", "en"],
-        vendor="Google Inc.",
-        platform="Win32",
-        webgl_vendor="Intel Inc.",
-        renderer="Intel Iris OpenGL Engine",
-        fix_hairline=True,
-    )
+                    # Attempt to solve CAPTCHA after country page
+                    driver.uc_gui_click_captcha()
 
-    countries = ["United States", "France", "Italy", "United Kingdom", "Germany", "Spain", "United Arab Emirates",
-                 "Russia", "Switzerland", "Netherlands", "Japan", "England", "Canada", "Brazil", "Poland", "Australia"]
-    with open("../../data/raw/colognes.txt", "w", encoding="utf-8") as f:
-        for country in countries:
-            try:
-                driver.get(f"https://www.fragrantica.com/country/{country}.html")
-                # Scroll down to trigger dynamic content
-                driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-                time.sleep(5)  # give time for JS to load after scrolling
-                tree1 = html.fromstring(driver.page_source)
-                brand_urls = tree1.xpath("//div[contains(@class,'designerlist')]//a/@href")
-                for brand_url in brand_urls:
-                    try:
-                        driver.get(f"https://www.fragrantica.com{brand_url}")
-                        # Scroll down to trigger dynamic content
-                        driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-                        time.sleep(5)  # give time for JS to load after scrolling
-                        tree2 = html.fromstring(driver.page_source)
-                        cologne_urls = tree2.xpath("//div[@class='flex-child-auto']//a//@href")
+                    last_height = driver.driver.execute_script("return document.body.scrollHeight")
+                    while True:
+                        driver.driver.execute_script("window.scrollBy(0, window.innerHeight);")
+                        time.sleep(1)
+                        new_height = driver.driver.execute_script("return document.body.scrollHeight")
+                        if new_height == last_height:
+                            break
+                        last_height = new_height
+
+                    driver.wait_for_element("div.designerlist")
+                    tree1 = html.fromstring(driver.get_page_source())
+                    brand_urls = tree1.xpath("//div[contains(@class,'designerlist')]//a/@href")
+
+                    for brand_url in brand_urls:
+                        brand_full_url = f"https://www.fragrantica.com{brand_url}"
+                        driver.open(brand_full_url)
+
+                        # Attempt to solve CAPTCHA after brand page
+                        driver.uc_gui_click_captcha()
+
+                        last_height = driver.driver.execute_script("return document.body.scrollHeight")
+                        while True:
+                            driver.driver.execute_script("window.scrollBy(0, window.innerHeight);")
+                            time.sleep(1)
+                            new_height = driver.driver.execute_script("return document.body.scrollHeight")
+                            if new_height == last_height:
+                                break
+                            last_height = new_height
+
+                        driver.wait_for_element("div.flex-child-auto")
+                        tree2 = html.fromstring(driver.get_page_source())
+                        cologne_urls = tree2.xpath("//div[contains(@class, 'flex-child-auto')]//a/@href")
+
                         for cologne_url in cologne_urls:
-                            url = f"https://www.fragrantica.com{cologne_url}" + "\n"
+                            url = f"https://www.fragrantica.com{cologne_url}\n"
                             f.write(url)
-                    except Exception:
-                        continue
-            except Exception:
-                continue
+                            print(url)
 
-    driver.quit()
+                except Exception as e:
+                    print(f"Skipping {country} due to: {e}")
+                    continue
 
 def note_scraper():
     with open("../../data/raw/notes.txt", "r",encoding="utf-8") as f:
@@ -208,10 +223,8 @@ def cologne_scraper():
 def main():
     #get_note_urls()
     get_cologne_urls()
-    note_scraper()
-    cologne_scraper()
+    #note_scraper()
+    #cologne_scraper()
 
 if __name__ == "__main__":
     main()
-
-
