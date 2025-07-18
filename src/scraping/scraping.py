@@ -1,9 +1,7 @@
 import os
+import re
 from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
-from selenium.webdriver.support.ui import WebDriverWait
-from selenium.webdriver.support import expected_conditions as EC
-from selenium.webdriver.common.by import By
 from seleniumbase import SB
 from selenium_stealth import stealth
 from urllib import request, error
@@ -11,7 +9,11 @@ import requests
 from dotenv import load_dotenv
 from lxml import html
 from pymongo.mongo_client import MongoClient
-import time
+import time, random
+
+BASE_URL = "https://www.fragrantica.com"
+global num_requests
+MAX_REQUESTS = 25
 
 load_dotenv()
 
@@ -49,7 +51,7 @@ def get_note_urls():
         fix_hairline=True,
     )
 
-    driver.get("https://www.fragrantica.com/notes/")
+    driver.get(BASE_URL+"/notes/")
     # Scroll down to trigger dynamic content
     driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
     time.sleep(5)  # give time for JS to load after scrolling
@@ -64,88 +66,158 @@ def get_note_urls():
 
     driver.quit()
 
+def clean_name(text):
+    # Replace spaces and these characters: / \ , . ' " &
+    cleaned = re.sub(r"[ /\\,.\'\"&®]+", "-", text)
+    # Remove double dashes if they appear
+    cleaned = re.sub(r"-+", "-", cleaned)
+    # Remove accents
+    cleaned = re.sub(r"[é]+","e",cleaned)
+    cleaned = re.sub(r"[ô]+","o",cleaned)
+    cleaned = re.sub(r"[á]+","a",cleaned)
+    # Strip leading/trailing dashes
+    return cleaned.strip("-")
+
 def get_cologne_urls():
-    with SB(uc=True, headless=True) as driver:
-        countries = ["United States", "France", "Italy", "United Kingdom", "Germany", "Spain",
-                     "United Arab Emirates", "Russia", "Switzerland", "Netherlands", "Japan",
-                     "England", "Canada", "Brazil", "Poland", "Australia"]
+    USER_AGENTS = [
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/121.0.0.0 Safari/537.36"
+    ]
 
-        with open("../../data/raw/colognes.txt", "w", encoding="utf-8") as f:
-            for country in countries:
+    with SB(uc=True, headless=False) as driver:
+        # Random user-agent
+        driver.driver.execute_cdp_cmd(
+            'Network.setUserAgentOverride',
+            {"userAgent": random.choice(USER_AGENTS)}
+        )
+
+        designer_url = BASE_URL + "/designers/"
+        driver.open(designer_url)
+        driver.uc_gui_click_captcha()
+        driver.sleep(random.uniform(1, 3))
+        driver.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+        driver.sleep(random.uniform(2, 5))
+
+        driver.wait_for_element("div.designerlist")
+        tree = html.fromstring(driver.get_page_source())
+
+        names_raw = tree.xpath("//div[contains(@class,'designerlist')]//a/text()")
+        urls_raw = tree.xpath("//div[contains(@class,'designerlist')]//a/@href")
+        names_cleaned = [clean_name(name.strip()) for name in names_raw]
+
+        assert len(names_cleaned) == len(urls_raw), "Mismatch in number of names and URLs"
+
+        brand_map = dict(zip(names_cleaned, urls_raw))
+
+        # Get brands already scraped
+        with open("../../data/raw/colognes.txt", "r", encoding="utf-8") as f:
+            lines = f.readlines()
+
+        brands_scraped = set()
+        for line in lines:
+            url = line.strip()
+            if "/perfume/" in url:
+                parts = url.split("/perfume/")[1].split("/")
+                if len(parts) >= 1:
+                    brand = parts[0]
+                    brands_scraped.add(brand)
+
+        # Use dictionary keys for difference
+        all_brands = set(brand_map.keys())
+        brands_not_scraped = all_brands - brands_scraped
+
+        print(f"Brands not yet scraped: {len(brands_not_scraped)}")
+
+        with open("../../data/raw/colognes.txt", "a", encoding="utf-8") as f:
+            for brand in brands_not_scraped:
+                # Lookup path in brand_map
+                brand_path = brand_map[brand]
+                brand_full_url = BASE_URL + brand_path
+
+                time.sleep(random.uniform(5, 15))
+
+                driver.driver.execute_script("window.scrollBy(0, window.innerHeight/2);")
+                driver.sleep(random.uniform(1, 3))
+
                 try:
-                    country_url = f"https://www.fragrantica.com/country/{country}.html"
-                    driver.open(country_url)
-
-                    # Attempt to solve CAPTCHA after country page
+                    driver.open(brand_full_url)
                     driver.uc_gui_click_captcha()
+                    driver.sleep(random.uniform(1, 3))
 
                     last_height = driver.driver.execute_script("return document.body.scrollHeight")
                     while True:
                         driver.driver.execute_script("window.scrollBy(0, window.innerHeight);")
-                        time.sleep(1)
+                        time.sleep(random.uniform(1, 2))
                         new_height = driver.driver.execute_script("return document.body.scrollHeight")
                         if new_height == last_height:
                             break
                         last_height = new_height
 
-                    driver.wait_for_element("div.designerlist")
-                    tree1 = html.fromstring(driver.get_page_source())
-                    brand_urls = tree1.xpath("//div[contains(@class,'designerlist')]//a/@href")
+                    driver.wait_for_element("div.flex-child-auto")
+                    tree2 = html.fromstring(driver.get_page_source())
+                    cologne_urls = tree2.xpath("//div[contains(@class, 'flex-child-auto')]//a/@href")
 
-                    for brand_url in brand_urls:
-                        brand_full_url = f"https://www.fragrantica.com{brand_url}"
-                        driver.open(brand_full_url)
-
-                        # Attempt to solve CAPTCHA after brand page
-                        driver.uc_gui_click_captcha()
-
-                        last_height = driver.driver.execute_script("return document.body.scrollHeight")
-                        while True:
-                            driver.driver.execute_script("window.scrollBy(0, window.innerHeight);")
-                            time.sleep(1)
-                            new_height = driver.driver.execute_script("return document.body.scrollHeight")
-                            if new_height == last_height:
-                                break
-                            last_height = new_height
-
-                        driver.wait_for_element("div.flex-child-auto")
-                        tree2 = html.fromstring(driver.get_page_source())
-                        cologne_urls = tree2.xpath("//div[contains(@class, 'flex-child-auto')]//a/@href")
-
-                        for cologne_url in cologne_urls:
-                            url = f"https://www.fragrantica.com{cologne_url}\n"
-                            f.write(url)
-                            print(url)
+                    for cologne_url in cologne_urls:
+                        url = f"{BASE_URL}{cologne_url}\n"
+                        f.write(url)
+                        print(url)
 
                 except Exception as e:
-                    print(f"Skipping {country} due to: {e}")
+                    print(f"Skipping {brand} due to: {e}")
                     continue
 
 def note_scraper():
+    global num_requests
+    USER_AGENTS = [
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
+        "Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 Chrome/121.0.0.0 Safari/537.36"
+    ]
+
+    # Get URLs from file
     with open("../../data/raw/notes.txt", "r",encoding="utf-8") as f:
         note_urls = f.readlines()
     num_notes = len(note_urls)
     num_records = get_collection().count_documents({})
-    for idx in range(num_records,num_notes):
-        try:
-            url = note_urls[idx][:-1]
-            page = requests.get(url)
-            tree = html.fromstring(page.content)
-            note_title = tree.xpath("//h1//text()")[0].trim()
-            note_group = tree.xpath("//h3//b")[0].trim()
-            note_description = tree.xpath("//div[@class='cell callout']//p//text()")[0].trim()
-            note_data = {
-                "name": note_title,
-                "group": note_group.text,
-                "description": note_description,
-                "url": url
-            }
-            if get_data_by_name(note_title) is None:
-                insert_data(note_data,"notes")
-            else:
+
+    with SB(uc=True, headless=False) as driver:
+        # Random user-agent
+        driver.driver.execute_cdp_cmd(
+            'Network.setUserAgentOverride',
+            {"userAgent": random.choice(USER_AGENTS)}
+        )
+
+        for idx in range(num_records,num_notes):
+
+            if num_requests >= MAX_REQUESTS:
+                time.sleep(60000)
+                num_requests = 0
+            try:
+                url = note_urls[idx][:-1]
+                driver.open(url)
+                driver.uc_gui_click_captcha()
+                driver.sleep(random.uniform(1, 3))
+                driver.driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
+                driver.sleep(random.uniform(2, 5))
+                num_requests += 1
+
+                tree = html.fromstring(driver.get_page_source())
+                note_title = tree.xpath("//h1//text()")[0].trim()
+                note_group = tree.xpath("//h3//b")[0].trim()
+                note_description = tree.xpath("//div[@class='cell callout']//p//text()")[0].trim()
+                note_data = {
+                    "name": note_title,
+                    "group": note_group.text,
+                    "description": note_description,
+                    "url": url
+                }
+                if get_data_by_name(note_title) is None:
+                    insert_data(note_data,"notes")
+                else:
+                    continue
+            except requests.exceptions.ConnectionError as e:
                 continue
-        except requests.exceptions.ConnectionError as e:
-            continue
 
 def represents_int(s):
     try:
@@ -222,8 +294,8 @@ def cologne_scraper():
 
 def main():
     #get_note_urls()
-    get_cologne_urls()
-    #note_scraper()
+    #get_cologne_urls()
+    note_scraper()
     #cologne_scraper()
 
 if __name__ == "__main__":
