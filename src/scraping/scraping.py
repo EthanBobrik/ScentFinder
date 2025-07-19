@@ -34,6 +34,12 @@ def get_data_by_name(name, collection_name="colognes"):
     collection = get_collection(collection_name)
     return collection.find_one({"name": name})
 
+def get_scraperapi_response(url):
+    API_KEY = os.getenv("SCRAPERAPI_KEY")
+    scraperapi_url = f"http://api.scraperapi.com/?api_key={API_KEY}&url={url}&render=true"
+    return requests.get(scraperapi_url, timeout=20)
+
+
 def get_note_urls():
     options = Options()
     options.add_argument("--headless")
@@ -189,10 +195,6 @@ def note_scraper():
         )
 
         for idx in range(num_records,num_notes):
-
-            if num_requests >= MAX_REQUESTS:
-                time.sleep(60000)
-                num_requests = 0
             try:
                 url = note_urls[idx][:-1]
                 driver.open(url)
@@ -203,12 +205,12 @@ def note_scraper():
                 num_requests += 1
 
                 tree = html.fromstring(driver.get_page_source())
-                note_title = tree.xpath("//h1//text()")[0].trim()
-                note_group = tree.xpath("//h3//b")[0].trim()
-                note_description = tree.xpath("//div[@class='cell callout']//p//text()")[0].trim()
+                note_title = tree.xpath("//h1//text()")[0].strip()
+                note_group = tree.xpath("//h3//b")[0].text.strip()
+                note_description = tree.xpath("//div[@class='cell callout']//p//text()")[0].strip()
                 note_data = {
                     "name": note_title,
-                    "group": note_group.text,
+                    "group": note_group,
                     "description": note_description,
                     "url": url
                 }
@@ -227,6 +229,7 @@ def represents_int(s):
         return False
 
 def cologne_scraper():
+    global num_requests
     with open("../../data/raw/colognes.txt", "r",encoding="utf-8") as f:
         cologne_urls = f.readlines()
     num_colognes = len(cologne_urls)
@@ -234,7 +237,14 @@ def cologne_scraper():
     for idx in range(num_records,num_colognes):
         try:
             url = cologne_urls[idx][:-1]
-            page = requests.get(url)
+            if num_requests % 25 == 0:
+                page = get_scraperapi_response(url)
+            else:
+                try:
+                    page = requests.get(url, timeout=20)
+                except Exception:
+                    page = get_scraperapi_response(url)
+            num_requests += 1
             tree = html.fromstring(page.content)
             brand_and_perfume = url[35:-6].split("/")
             brand = brand_and_perfume[0].replace("-"," ")
@@ -244,7 +254,7 @@ def cologne_scraper():
             if not page_title:
                 launch_year = None
             else:
-                launch_year = page_title[-4:].trim()
+                launch_year = page_title[-4:].strip()
                 if not represents_int(launch_year):
                     launch_year = None
             main_accords = [text.strip() for text in tree.xpath("//div[@class='cell accord-bar']//text()") if text.strip()]
@@ -293,9 +303,9 @@ def cologne_scraper():
             continue
 
 def main():
-    #get_note_urls()
+    get_note_urls()
     #get_cologne_urls()
-    note_scraper()
+    #note_scraper()
     #cologne_scraper()
 
 if __name__ == "__main__":

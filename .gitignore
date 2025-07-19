@@ -9,5 +9,3 @@ cache/
 *.sqlite3
 *.db
 .env.*
-data/raw/
-data/interim/
