@@ -85,6 +85,8 @@ def clean_name(text):
     return cleaned.strip("-")
 
 def get_cologne_urls():
+    global num_requests
+    num_requests = 0
     USER_AGENTS = [
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36",
         "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
@@ -136,6 +138,11 @@ def get_cologne_urls():
         print(f"Brands not yet scraped: {len(brands_not_scraped)}")
 
         with open("../../data/raw/colognes.txt", "a", encoding="utf-8") as f:
+            if num_requests > MAX_REQUESTS:
+                print("Too many requests")
+                time.sleep(600)
+                num_requests = 0
+
             for brand in brands_not_scraped:
                 # Lookup path in brand_map
                 brand_path = brand_map[brand]
@@ -168,6 +175,7 @@ def get_cologne_urls():
                         url = f"{BASE_URL}{cologne_url}\n"
                         f.write(url)
                         print(url)
+                        num_requests += 1
 
                 except Exception as e:
                     print(f"Skipping {brand} due to: {e}")
@@ -303,8 +311,8 @@ def cologne_scraper():
             continue
 
 def main():
-    get_note_urls()
-    #get_cologne_urls()
+    #get_note_urls()
+    get_cologne_urls()
     #note_scraper()
     #cologne_scraper()
 
