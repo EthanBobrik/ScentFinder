@@ -4,41 +4,25 @@ from selenium import webdriver
 from selenium.webdriver.chrome.options import Options
 from seleniumbase import SB
 from selenium_stealth import stealth
-from urllib import request, error
+from urllib import error
 import requests
 from dotenv import load_dotenv
 from lxml import html
 from pymongo.mongo_client import MongoClient
 import time, random
+from database.db import session
+from database.models import Note, Cologne
 
+MAX_REQUESTS = 25
 BASE_URL = "https://www.fragrantica.com"
 global num_requests
-MAX_REQUESTS = 25
 
 load_dotenv()
-
-def get_mongo_client():
-    uri = os.getenv("MONGO_URI")
-    return MongoClient(uri)
-
-def get_collection(db_name="scentfinder", collection_name="colognes"):
-    client = get_mongo_client()
-    db = client[db_name]
-    return db[collection_name]
-
-def insert_data(data, collection_name="colognes"):
-    collection = get_collection(collection_name)
-    collection.insert_one(data)
-
-def get_data_by_name(name, collection_name="colognes"):
-    collection = get_collection(collection_name)
-    return collection.find_one({"name": name})
 
 def get_scraperapi_response(url):
     API_KEY = os.getenv("SCRAPERAPI_KEY")
     scraperapi_url = f"http://api.scraperapi.com/?api_key={API_KEY}&url={url}&render=true"
     return requests.get(scraperapi_url, timeout=20)
-
 
 def get_note_urls():
     options = Options()
@@ -193,7 +177,7 @@ def note_scraper():
     with open("../../data/raw/notes.txt", "r",encoding="utf-8") as f:
         note_urls = f.readlines()
     num_notes = len(note_urls)
-    num_records = get_collection().count_documents({})
+    num_records = session.query(Note).count()
 
     with SB(uc=True, headless=False) as driver:
         # Random user-agent
@@ -216,14 +200,11 @@ def note_scraper():
                 note_title = tree.xpath("//h1//text()")[0].strip()
                 note_group = tree.xpath("//h3//b")[0].text.strip()
                 note_description = tree.xpath("//div[@class='cell callout']//p//text()")[0].strip()
-                note_data = {
-                    "name": note_title,
-                    "group": note_group,
-                    "description": note_description,
-                    "url": url
-                }
-                if get_data_by_name(note_title) is None:
-                    insert_data(note_data,"notes")
+                note = Note(name=note_title, group=note_group, description=note_description)
+                existing = session.query(Note).filter_by(name=note.name).first()
+                if not existing:
+                    session.add(note)
+                    session.commit()
                 else:
                     continue
             except requests.exceptions.ConnectionError as e:
@@ -241,7 +222,7 @@ def cologne_scraper():
     with open("../../data/raw/colognes.txt", "r",encoding="utf-8") as f:
         cologne_urls = f.readlines()
     num_colognes = len(cologne_urls)
-    num_records = get_collection().count_documents({})
+    num_records = session.query(Cologne).count()
     for idx in range(num_records,num_colognes):
         try:
             url = cologne_urls[idx][:-1]
@@ -293,18 +274,24 @@ def cologne_scraper():
             sillage = {"intimate": represents_int(votes[5]), "moderate": represents_int(votes[6]), "strong": represents_int(votes[7]), "enormous": represents_int(votes[8])}
             gender = {"female": represents_int(votes[9]), "more female": represents_int(votes[10]), "unisex": represents_int(votes[11]), "more male": represents_int(votes[12]), "male": represents_int(votes[13])}
             price_value = {"way overpriced": represents_int(votes[14]), "overpriced": represents_int(votes[15]), "ok": represents_int(votes[16]), "good value": represents_int(votes[17]), "great value": represents_int(votes[18])}
-            perfume = {
-                "title":perfume_title,
-                "brand":brand,
-                "launch year":launch_year,
-                "main accords":main_accords,
-                "notes":notes,
-                "longevity":longevity,
-                "sillage":sillage,
-                "gender":gender,
-                "price value":price_value}
-            if get_data_by_name(perfume) is None:
-                insert_data(perfume,"colognes")
+            cologne = Cologne(
+                name=perfume_title,
+                brand=brand,
+                launch_year=launch_year,
+                url=url
+            )
+            top_notes = notes.get("top") or []
+            middle_notes = notes.get("middle") or []
+            base_notes = notes.get("base") or []
+            for note_name in (top_notes + middle_notes + base_notes):
+                note = session.query(Note).filter_by(name=note_name).first()
+                if note:
+                    cologne.notes.append(note)
+
+            existing = session.query(Cologne).filter_by(name=cologne.name).first()
+            if not existing:
+                session.add(cologne)
+                session.commit()
             else:
                 continue
         except error.HTTPError:
