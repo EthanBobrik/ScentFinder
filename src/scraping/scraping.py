@@ -1,14 +1,12 @@
 import os, re
-from selenium import webdriver
-from selenium.webdriver.chrome.options import Options
 from seleniumbase import SB
-from selenium_stealth import stealth
 import requests
 from dotenv import load_dotenv
 from lxml import html
 import time, random
 from database.db import session
 from database.models import Cologne, Note, CologneNote, NoteType
+from bs4 import BeautifulSoup
 
 MAX_REQUESTS = 25
 BASE_URL = "https://www.fragrantica.com"
@@ -22,38 +20,31 @@ def get_scraperapi_response(url):
     scraperapi_url = f"http://api.scraperapi.com/?api_key={API_KEY}&url={url}&render=true"
     return requests.get(scraperapi_url, timeout=20)
 
-def get_note_urls():
-    options = Options()
-    options.add_argument("--headless")
-    options.add_argument("--start-maximized")
-    options.add_argument(
-        "user-agent=Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/122.0.0.0 Safari/537.36")
-
-    driver = webdriver.Chrome(options=options)
-
-    stealth(driver,
-            languages=["en-US", "en"],
-            vendor="Google Inc.",
-            platform="Win32",
-            webgl_vendor="Intel Inc.",
-            renderer="Intel Iris OpenGL Engine",
-            fix_hairline=True,
-            )
-
-    driver.get(BASE_URL + "/notes/")
-    # Scroll down to trigger dynamic content
-    driver.execute_script("window.scrollTo(0, document.body.scrollHeight);")
-    time.sleep(5)  # give time for JS to load after scrolling
-    tree = html.fromstring(driver.page_source)
-    note_urls = tree.xpath("//div[contains(@class, 'notebox')]//a/@href")
-    print("Found", len(note_urls), "note URLs")
-
-    with open("../../data/raw/notes.txt", "w", encoding="utf-8") as f:
-        for url in note_urls:
-            f.write(url + "\n")
-            print(url)
-
-    driver.quit()
+def notes_scraper():
+    """
+    Fetches all notes from /notes/ page, extracting name, url, and group for each note,
+    and inserts each unique note into the database if it does not already exist.
+    """
+    response = requests.get(BASE_URL + "/notes/")
+    soup = BeautifulSoup(response.content, "html.parser")
+    tree = html.fromstring(str(soup))
+    # Find all <a> inside <div class="notebox">
+    note_links = tree.xpath("//div[contains(@class, 'notebox')]/a")
+    for a in note_links:
+        name = a.xpath(".//text()")
+        name = name[0].strip() if name else None
+        note_url = a.xpath(".//@href")
+        note_url = note_url[0] if note_url else None
+        # Find the nearest preceding group header (h2 inside div.text-center)
+        group = a.xpath(".//preceding::div[@class='text-center']//h2[1]/text()")
+        group = group[0].strip() if group else None
+        # Only insert if note does not already exist (by name)
+        if name and note_url:
+            exists = session.query(Note).filter_by(name=name).first()
+            if not exists:
+                note = Note(name=name, group=group, url=note_url)
+                session.add(note)
+    session.commit()
 
 def clean_name(text):
     # Replace spaces and these characters: / \ , . ' " &
@@ -174,42 +165,6 @@ def represents_int(s):
     except (ValueError, TypeError):
         return False
 
-def note_scraper():
-    with open("../../data/raw/notes.txt", "r", encoding="utf-8") as f:
-        note_urls = f.readlines()
-
-    num_notes = len(note_urls)
-    num_records = session.query(Note).count()
-
-    for idx in range(num_records, num_notes):
-        url = note_urls[idx].strip()
-        try:
-            page = get_scraperapi_response(url)
-            tree = html.fromstring(page.content)
-
-            note_title_elements = tree.xpath("//h1//text()")
-            if not note_title_elements:
-                continue
-            note_title = note_title_elements[0].strip()
-
-            note_group_elements = tree.xpath("//h3//b")
-            note_group = note_group_elements[0].text.strip() if note_group_elements else ""
-
-            note_description_elements = tree.xpath("//div[@class='cell callout']//p//text()")
-            note_description = note_description_elements[0].strip() if note_description_elements else ""
-
-            note = Note(name=note_title, group=note_group, description=note_description)
-            existing = session.query(Note).filter_by(name=note.name).first()
-            if not existing:
-                session.add(note)
-                session.commit()
-                print(f"[+] Added note: {note_title}")
-            else:
-                print(f"[=] Note already exists: {note_title}")
-        except Exception as e:
-            print(f"[!] Error processing {url}: {e}")
-            continue
-
 def cologne_scraper():
     with open("../../data/raw/colognes.txt", "r", encoding="utf-8") as f:
         cologne_urls = f.readlines()
@@ -313,9 +268,8 @@ def cologne_scraper():
             continue
 
 def main():
-    # get_note_urls()
     get_cologne_urls()
-    # note_scraper()
+    # notes_scraper()
     # cologne_scraper()
 
 

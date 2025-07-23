@@ -1,4 +1,4 @@
-from sqlalchemy import Column, ForeignKey, Integer, Table, String, ARRAY, Enum,Float
+from sqlalchemy import Column, ForeignKey, Integer, Table, String, ARRAY, Enum, JSON
 from sqlalchemy.orm import relationship, declarative_base
 import enum
 
@@ -31,13 +31,13 @@ class Cologne(Base):
     name = Column(String, nullable=False)
     brand = Column(String)
     launch_year = Column(Integer)
-    main_accords = Column(ARRAY(String),nullable=True)  # List of main accords
+    main_accords = Column(JSON,nullable=True)  # List of main accords
 
     # Keep these for backward compatibility and quick access, but primary data is in relationships
-    top_notes = Column(ARRAY(String))
-    middle_notes = Column(ARRAY(String))
-    base_notes = Column(ARRAY(String))
-    general_notes = Column(ARRAY(String))
+    top_notes = Column(JSON)
+    middle_notes = Column(JSON)
+    base_notes = Column(JSON)
+    general_notes = Column(JSON)
 
     # Voting data
     longevity_very_weak = Column(Integer)
@@ -89,7 +89,6 @@ class Note(Base):
     id = Column(Integer, primary_key=True)
     name = Column(String, unique=True, nullable=False)
     group = Column(String)
-    description = Column(String)
     url = Column(String)
 
     # Relationships
