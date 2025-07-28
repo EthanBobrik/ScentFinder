@@ -19,9 +19,9 @@ class CologneNote(Base):
     note_id = Column(Integer, ForeignKey("notes.id"), nullable=False)
     note_type = Column(Enum(NoteType), nullable=False)  # TOP, MIDDLE, BASE, or GENERAL
 
-    # Relationships
-    cologne = relationship("Cologne", back_populates="notes")
-    note = relationship("Note", back_populates="colognes")
+    # Relationships - Fixed the back_populates names
+    cologne = relationship("Cologne", back_populates="cologne_notes")
+    note = relationship("Note", back_populates="cologne_notes")
 
 
 class Cologne(Base):
@@ -31,7 +31,7 @@ class Cologne(Base):
     name = Column(String, nullable=False)
     brand = Column(String)
     launch_year = Column(Integer)
-    main_accords = Column(JSON,nullable=True)  # List of main accords
+    main_accords = Column(JSON, nullable=True)  # List of main accords
 
     # Keep these for backward compatibility and quick access, but primary data is in relationships
     top_notes = Column(JSON)
@@ -62,7 +62,7 @@ class Cologne(Base):
 
     url = Column(String)
 
-    # Relationships
+    # Relationships - Fixed the relationship name
     cologne_notes = relationship("CologneNote", back_populates="cologne", cascade="all, delete-orphan")
 
     # Convenience properties to access notes by type
@@ -91,7 +91,7 @@ class Note(Base):
     group = Column(String)
     url = Column(String)
 
-    # Relationships
+    # Relationships - Fixed the relationship name
     cologne_notes = relationship("CologneNote", back_populates="note")
 
     # Convenience property to get all colognes that use this note
