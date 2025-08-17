@@ -54,7 +54,7 @@ ScentFinder is a data science project designed to recommend colognes based on sc
 scentfinder/
 ├── data/            # Raw, interim, and processed datasets
 ├── notebooks/       # EDA and modelling notebooks
-├── src/             # Scraping, cleaning, modelling, and app modules
+├── src/             # Scraping, Data Cleaning, modelling, and app modules
 ├── config/          # Pipeline settings, database schema
 ├── cache/           # Cached models and similarity matrices
 ├── reports/         # Visualizations and final report
