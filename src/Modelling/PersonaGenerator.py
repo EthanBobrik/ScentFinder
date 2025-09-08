@@ -41,7 +41,13 @@ Return ONLY valid JSON: an array of {n_personas} persona objects.
 Each persona strictly follows this schema (all strings lowercase):
 
 {{
-  "liked_accords":     [5-8 items from ALLOWED_ACCORDS],
+  "liked_accords_ranked": [
+    {{"name": str, "rank": 1}},
+    {{"name": str, "rank": 2}},
+    {{"name": str, "rank": 3}},
+    {{"name": str, "rank": 4}},
+    {{"name": str, "rank": 5}}
+  ],
   "disliked_accords":  [0-3 items from ALLOWED_ACCORDS, no overlap with liked_accords],
   "liked_notes_top":   [5-10 items from ALLOWED_TOP],
   "liked_notes_mid":   [5-10 items from ALLOWED_MID],
@@ -49,14 +55,20 @@ Each persona strictly follows this schema (all strings lowercase):
   "avoid_notes":       [0-5 items from the union of ALLOWED_TOP/MID/BASE, no overlap with liked notes],
   "gender_focus":      one of {GENDER_CHOICES},
   "season":            one of {SEASON_CHOICES},
-  "use_cases":         2-4 items from {USE_CASE_CHOICES},
+  "use_case":          one of {USE_CASE_CHOICES},
   "intensity":         one of {INTENSITY_CHOICES}
 }}
+
+Constraints:
+- liked_accords_ranked MUST have exactly 5 entries, with unique accords and unique ranks 1–5.
+- Ranks must be consecutive integers from 1 through 5.
+- Accord "name" must come from ALLOWED_ACCORDS only.
+- Use_case must be a single choice, not a list.
+- Do NOT invent values outside the allowed lists.
 
 Coherence hints:
 - summer → emphasize citrus/aromatic/green/aquatic; winter → amber/woody/sweet/balsamic ok.
 - men → woody/aromatic/spicy bias; women → floral/fruity/sweet; unisex → balanced.
-- Do NOT invent values outside the allowed lists.
 
 ALLOWED_ACCORDS = {vocab['accords']}
 ALLOWED_TOP     = {vocab['top']}
@@ -76,8 +88,10 @@ def validate(p: Dict[str, Any], v: Dict[str,List[str]]) -> Dict[str,Any]:
     accords = set(v['accords']); top=set(v['top']); mid = set(v['mid']); base = set(v['base'])
     all_notes = top|mid|base
 
-    p['liked_accords'] = [a for a in _norm_list(p.get('liked_accords',[])) if a in accords][:8]
-    p['disliked_accords'] = [a for a in _norm_list(p.get('disliked_accords',[])) if a in accords and a not in p['liked_accords']][:3]
+    p['liked_accords_ranked'] = [{"name": a['name'], "rank": i + 1} for i, a in
+                                 enumerate(list(p.get('liked_accords_ranked', []))) if a['name'] in accords][:5]
+    p['disliked_accords'] = [a for a in list(p.get('disliked_accords', [])) if
+                             a in accords and a not in [item['name'] for item in p['liked_accords_ranked']]][:3]
     p["liked_notes_top"]  = [n for n in _norm_list(p.get("liked_notes_top", []))  if n in top][:10]
     p["liked_notes_mid"]  = [n for n in _norm_list(p.get("liked_notes_mid", []))  if n in mid][:10]
     p["liked_notes_base"] = [n for n in _norm_list(p.get("liked_notes_base", [])) if n in base][:10]
@@ -92,16 +106,18 @@ def validate(p: Dict[str, Any], v: Dict[str,List[str]]) -> Dict[str,Any]:
     if p['gender_focus'] not in GENDER_CHOICES: p['gender_focus']='any'
     p["season"] = (p.get("season", "all") or "all").lower()
     if p["season"] not in SEASON_CHOICES: p["season"] = "all"
-    uc = [u for u in _norm_list(p.get("use_cases", [])) if u in USE_CASE_CHOICES]
-    p["use_cases"] = (uc if 2 <= len(uc) <= 4 else ["casual", "office"])[:4]
+    p["use_case"] = (p.get('use_case','casual') or 'casual').lower()
+    if p['use_case'] not in USE_CASE_CHOICES: p['use_case'] = 'casual'
     p["intensity"] = (p.get("intensity", "moderate") or "moderate").lower()
     if p["intensity"] not in INTENSITY_CHOICES: p["intensity"] = "moderate"
 
-    if len(p['liked_accords']) < 3:
-        for a in ['woody','citrus','aromatic','floral','amber']:
-            if a in accords and a not in p['liked_accords']:
-                p['liked_accords'].append(a)
-            if len(p['liked_accords']) >= 5: break
+    if len(p['liked_accords_ranked']) < 3:
+        for a in ['woody', 'citrus', 'aromatic', 'floral', 'amber']:
+            if a in accords and a not in [item['name'] for item in p['liked_accords_ranked']]:
+                current_rank = len(p['liked_accords_ranked']) + 1
+                p['liked_accords_ranked'].append({"name": a, "rank": current_rank})
+            if len(p['liked_accords_ranked']) >= 5: break
+
     if not (p["liked_notes_top"] or p["liked_notes_mid"] or p["liked_notes_base"]):
         p["liked_notes_top"]  = list(top)[:5]
         p["liked_notes_mid"]  = list(mid)[:5]
