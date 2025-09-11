@@ -47,21 +47,21 @@ def prompt(item_row: Dict[str, Any], preference: Dict[str, Any]) -> str:
     gender_pref = str(preference.get('gender_focus','any')).lower()
 
     return (
-        "You are a fragrance expert. Explain why this perfume was recommended using the signals provided.\n"
-        "Write 1 short sentence + exactly 3 concise bullet points. Avoid hype; be specific. Keep under 70 words total.\n"
-        "If accord overlap exists, mention it first. Use season/use-case/intensity only if helpful.\n"
-        f"USER CONTEXT: season={season}, use_case={use_case}, intensity={intensity}, gender_focus={gender_pref}\n"
-        "ITEM:\n"
-        f"- name: {perfume}\n"
-        f"- brand: {brand}\n"
-        f"- year: {year}\n"
-        f"- gender: {gender}\n"
-        f"- accords: {', '.join(accs)}\n"
-        f"- accord_overlap_with_user: {overlap}\n"
-        f"- sample_notes: {notes}\n"
-        f"- scores: content={sc:.3f}, persona={sp:.3f}, fused={sf:.3f}\n"
-        "OUTPUT FORMAT:\n"
-        "Sentence on one line, then exactly 3 bullets starting with '- '."
+        "Act as a fragrance curator with a unique perspective. This fragrance scored well for someone - tell them why in a fresh way each time.\n" 
+        f"WHAT THEY WANT: season={season}, use_case={use_case}, intensity={intensity}, gender_focus={gender_pref}\n" 
+        f"THE MATCH:\n" 
+        f"- name: {perfume}\n" 
+        f"- brand: {brand}\n" 
+        f"- year: {year}\n" 
+        f"- gender: {gender}\n" 
+        f"- accords: {', '.join(accs)}\n" 
+        f"- accord_overlap_with_user: {overlap}\n" 
+        f"- sample_notes: {notes}\n" 
+        f"- scores: content={sc:.3f}, persona={sp:.3f}, fused={sf:.3f}\n" 
+        "Focus on ONE compelling reason why this works, then support it three different ways. Change your voice and angle each time - sometimes technical, sometimes emotional, sometimes practical.\n" 
+        "Banned words: 'recommended', 'suitable', 'ideal', 'perfect', 'enhancing', 'providing', 'features', 'offering'.\n" 
+        "Mix up your openings: 'This captures...', 'Here's a scent that...', 'What makes this work...', etc.\n" 
+        "One sentence + 3 bullets with '- '. Stay under 70 words."
     )
 
 def generate(df: pd.DataFrame, preference: Dict[str, Any], model: str = DEFAULT_MODEL, batch_size: int = BATCH_SIZE, temperature: float = TEMPERATURE) -> List[str]:
