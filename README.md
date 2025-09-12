@@ -37,11 +37,11 @@ ScentFinder is a data science project designed to recommend colognes based on sc
 
 ## 🔧 Technologies Used
 
-- **Python 3.9+**
+- **Python 3.12+**
 - **BeautifulSoup / Requests** for scraping
 - **pandas / numpy / scikit-learn** for data processing & modeling
-- **PostgreSQL + SQLAlchemy** for relational database
-- **MongoDB** (optional) for document-based scent storage
+- **MongoDB + SQLAlchemy** for relational database
+- **MongoDB** for document-based scent storage
 - **joblib / pickle** for caching models
 - **Streamlit** for web app deployment
 - **Matplotlib / Seaborn / Plotly** for visualizations
@@ -52,26 +52,20 @@ ScentFinder is a data science project designed to recommend colognes based on sc
 
 ```bash
 scentfinder/
-├── data/            # Raw, interim, and processed datasets
-├── notebooks/       # EDA and modelling notebooks
-├── src/             # Scraping, Data Cleaning, modelling, and app modules
-├── config/          # Pipeline settings, database schema
-├── cache/           # Cached models and similarity matrices
-├── reports/         # Visualizations and final report
+├── data/            # Raw, interim, and processed datasets as well as saved models & sparse matrices
+├── database/        # Models and Database scripts
+├── src/             # All Modules
+    ├── Scraping/
+    ├── Data Cleaning/ 
+    ├── EDA/
+    ├── Modelling/
 ├── requirements.txt
 └── README.md
 ```
 
-## Project Timeline 
-| Week        | Focus           | 
-| ------------- |:-------------:|
-| 1      | Project setup, environment, schema design |
-| 2     | Web scraping and raw data collection      |
-| 3  | Data cleaning + database loading     |
-| 4  | Exploratory data analysis & visualization     |
-| 5  | Modeling & similarity logic     |
-| 6  | App deployment via Streamlit     |
-| 7  | Reporting, documentation, and polish     |
+## Future Improvements/ Steps
+1. Build a streamlit app to showcase the engine.
+2. Deploy
 
 ## Getting Started
 
@@ -95,7 +89,7 @@ streamlit run src/app/main.py
 
 ## 👤 Author
 Ethan Bobrik
-2nd-Year Data Science Student
+3rd-Year Data Science Student
 Western University
 
 ## 📌 Acknowledgments
