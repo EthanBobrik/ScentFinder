@@ -1,0 +1,43 @@
+{
+  "feature_meta_hash": 2222204793599549526,
+  "X_shape": [
+    23846,
+    3476
+  ],
+  "Z_ae_shape": [
+    23846,
+    256
+  ],
+  "Z_svd_shape": [
+    23846,
+    256
+  ],
+  "ZP_ae_shape": [
+    92,
+    256
+  ],
+  "ZP_svd_shape": [
+    92,
+    256
+  ],
+  "A_item_persona_ae_shape": [
+    23846,
+    92
+  ],
+  "A_item_persona_svd_shape": [
+    23846,
+    92
+  ],
+  "cfg": {
+    "seed": 42,
+    "embed_dim": 256,
+    "knn_neighbors": 1000,
+    "mmr_lambda": 0.4,
+    "topk": 20,
+    "ae_epochs": 10,
+    "ae_batch": 256,
+    "ae_lr": 0.001,
+    "ae_p_mask": 0.15,
+    "eval_k": 20
+  }
+}
